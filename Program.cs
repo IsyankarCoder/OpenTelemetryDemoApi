@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using System.Diagnostics.Metrics;
+using OpenTelemetry.Trace;
 
 
 namespace OpenTelemetryDemoApi
@@ -31,9 +32,21 @@ namespace OpenTelemetryDemoApi
                         .AddRuntimeInstrumentation() // CPU, RAM, Garbage Collection metrikleri
                         .AddOtlpExporter(otlOptions =>
                         {
+
                             // Verileri dışa port açmadan Collector'a gönderiyoruz
-                            otlOptions.Endpoint = new Uri("http://localhost:4317");
+                            otlOptions.Endpoint = new Uri("http://localhost:4318/v1/metrics");
+                            otlOptions.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf;
                         });
+                   }).WithTracing(tracing =>
+                   {
+                       tracing
+                        .AddAspNetCoreInstrumentation()
+                        .AddOtlpExporter(opt =>
+                        {
+                             opt.Endpoint = new Uri("http://localhost:4318/v1/metrics");
+                            opt.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf;
+                        });
+
                    });
                    
 
@@ -42,8 +55,10 @@ namespace OpenTelemetryDemoApi
             // 1. Özel bir Meter (Sayaç Grubu) ve Counter tanımlayın
             var myMeter = new Meter("OtelDemoApi.IsMetrikleri", "1.0.0");
             var testCounter = myMeter.CreateCounter<int>("volkan_tolkan_istek_sayisi", description: "Test endpointine gelen toplam istek");
-            app.MapGet("/test", () =>
+            app.MapGet("/test", (ILogger<Program> logger) =>
             {
+                logger.LogInformation("Test endpointine istek geldi! Zaman: {Zaman}", DateTime.Now);
+
                 testCounter.Add(1, new KeyValuePair<string, object?>("kullanici_tipi", "admin"));
                 return Results.Ok(new { Mesaj = "Metrik uretildi!", Zaman = DateTime.Now });
             });
